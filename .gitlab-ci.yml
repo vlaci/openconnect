@@ -1,5 +1,8 @@
 image: fedora:latest
 
+include:
+  template: SAST.gitlab-ci.yml
+
 CentOS7/GnuTLS:
   image: centos:7
   script:
