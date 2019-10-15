@@ -199,6 +199,7 @@ struct oc_vpn_proto {
 #define OC_FORM_OPT_SELECT	3
 #define OC_FORM_OPT_HIDDEN	4
 #define OC_FORM_OPT_TOKEN	5
+#define OC_FORM_OPT_SSO	6
 
 #define OC_FORM_RESULT_ERR		-1
 #define OC_FORM_RESULT_OK		0
@@ -252,6 +253,15 @@ struct oc_form_opt_select {
 	struct oc_choice **choices;
 };
 
+struct oc_sso_v2_opt {
+	char *login;
+	char *login_final;
+	char *logout;
+	char *logout_final;
+	char *token_cookie_name;
+	char *error_cookie_name;
+};
+
 /* All char * fields are static, owned by the XML parser */
 struct oc_auth_form {
 	char *banner;
@@ -263,6 +273,7 @@ struct oc_auth_form {
 	struct oc_form_opt *opts;
 	struct oc_form_opt_select *authgroup_opt;
 	int authgroup_selection;
+	struct oc_sso_v2_opt *sso_v2_opt;
 };
 
 struct oc_split_include {

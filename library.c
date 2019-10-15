@@ -20,6 +20,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -1166,12 +1167,46 @@ void nuke_opt_values(struct oc_form_opt *opt)
 	}
 }
 
+char* run_openconnect_helper(struct openconnect_info *vpninfo, struct oc_auth_form *form)
+{
+	FILE *proc;
+	char buff[1024];
+	int status = 0;
+	char args[1024];
+    struct oc_form_opt *opt;
+
+	snprintf(args, 1024, "openconnect-sso '%s' '%s' '%s' '%s' '%s' '%s'",
+			 form->sso_v2_opt->login,
+			 form->sso_v2_opt->login_final,
+			 form->sso_v2_opt->logout,
+			 form->sso_v2_opt->logout_final,
+			 form->sso_v2_opt->token_cookie_name,
+			 form->sso_v2_opt->error_cookie_name);
+
+	memset(buff, 0, 1024);
+	// vpn_progress(vpninfo, PRG_INFO, "===========================================\n");
+	proc = popen(args, "r");
+	if (!proc)
+	{
+		printf("================================== Error: %d", errno);
+		return;
+	}
+	fgets(buff, sizeof(buff), proc);
+
+	status = pclose(proc);
+	fprintf(stderr, "%s\n", buff);
+
+	return strdup(strtok(buff, "\n"));
+}
+
+
 int process_auth_form(struct openconnect_info *vpninfo, struct oc_auth_form *form)
 {
 	int ret;
 	struct oc_form_opt_select *grp = form->authgroup_opt;
 	struct oc_choice *auth_choice;
 	struct oc_form_opt *opt;
+	char **sso_tokenp = NULL;
 
 	if (!vpninfo->process_auth_form) {
 		vpn_progress(vpninfo, PRG_ERR, _("No form handler; cannot authenticate.\n"));
@@ -1195,6 +1230,11 @@ retry:
 		int second_auth = opt->flags & OC_FORM_OPT_SECOND_AUTH;
 		opt->flags &= ~OC_FORM_OPT_IGNORE;
 
+		if (opt->type == OC_FORM_OPT_SSO) {
+			sso_tokenp = &opt->_value;
+			continue;
+		}
+
 		if (!auth_choice ||
 		    (opt->type != OC_FORM_OPT_TEXT && opt->type != OC_FORM_OPT_PASSWORD))
 			continue;
@@ -1213,6 +1253,14 @@ retry:
 	}
 
 	ret = vpninfo->process_auth_form(vpninfo->cbdata, form);
+
+	if (ret == OC_FORM_RESULT_OK && sso_tokenp != NULL) {
+		*sso_tokenp = run_openconnect_helper(vpninfo, form);
+		if (*sso_tokenp == NULL) {
+			/* TODO: error handling */
+			ret = -EINVAL;
+		}
+	}
 
 	if (ret == OC_FORM_RESULT_NEWGROUP &&
 	    form->authgroup_opt &&

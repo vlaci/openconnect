@@ -225,6 +225,8 @@ static int parse_form(struct openconnect_info *vpninfo, struct oc_auth_form *for
 				opt->type = OC_FORM_OPT_TOKEN;
 			else
 				opt->type = OC_FORM_OPT_PASSWORD;
+		} else if (!strcmp(input_type, "sso")) {
+			opt->type = OC_FORM_OPT_SSO;
 		} else {
 			vpn_progress(vpninfo, PRG_INFO,
 				     _("Unknown input type %s in form\n"),
@@ -385,6 +387,11 @@ static int parse_auth_node(struct openconnect_info *vpninfo, xmlNode *xml_node,
 {
 	int ret = 0;
 
+	form->sso_v2_opt = calloc(1, sizeof(*form->sso_v2_opt));
+	if (!form->sso_v2_opt) {
+		return -ENOMEM;
+	}
+
 	for (xml_node = xml_node->children; xml_node; xml_node = xml_node->next) {
 		if (xml_node->type != XML_ELEMENT_NODE)
 			continue;
@@ -392,6 +399,13 @@ static int parse_auth_node(struct openconnect_info *vpninfo, xmlNode *xml_node,
 		xmlnode_get_text(xml_node, "banner", &form->banner);
 		xmlnode_get_text(xml_node, "message", &form->message);
 		xmlnode_get_text(xml_node, "error", &form->error);
+
+		xmlnode_get_text(xml_node, "sso-v2-login", &form->sso_v2_opt->login);
+		xmlnode_get_text(xml_node, "sso-v2-login-final", &form->sso_v2_opt->login_final);
+		xmlnode_get_text(xml_node, "sso-v2-logout", &form->sso_v2_opt->logout);
+		xmlnode_get_text(xml_node, "sso-v2-logout-final", &form->sso_v2_opt->logout_final);
+		xmlnode_get_text(xml_node, "sso-v2-token-cookie-name", &form->sso_v2_opt->token_cookie_name);
+		xmlnode_get_text(xml_node, "sso-v2-error-cookie-name", &form->sso_v2_opt->error_cookie_name);
 
 		if (xmlnode_is_named(xml_node, "form")) {
 
@@ -437,6 +451,16 @@ static int parse_auth_node(struct openconnect_info *vpninfo, xmlNode *xml_node,
 			vpninfo->csd_preurl = strdup(vpninfo->urlpath);
 		}
 	}
+
+	vpn_progress(vpninfo, PRG_INFO,
+		_("login='%s', login-final='%s', logout='%s', logout-final='%s', token-cookie='%s', error-cookie='%s'\n"),
+		form->sso_v2_opt->login,
+		form->sso_v2_opt->login_final,
+		form->sso_v2_opt->logout,
+		form->sso_v2_opt->logout_final,
+		form->sso_v2_opt->token_cookie_name,
+		form->sso_v2_opt->error_cookie_name
+	);
 
 out:
 	return ret;
@@ -781,7 +805,7 @@ static int xmlpost_complete(xmlDocPtr doc, struct oc_text_buf *body)
 static int xmlpost_initial_req(struct openconnect_info *vpninfo,
 			       struct oc_text_buf *request_body, int cert_fail)
 {
-	xmlNodePtr root, node;
+	xmlNodePtr root, node, capabilities_node;
 	xmlDocPtr doc = xmlpost_new_query(vpninfo, "init", &root);
 	struct oc_text_buf *url_buf;
 
@@ -812,6 +836,13 @@ static int xmlpost_initial_req(struct openconnect_info *vpninfo,
 		if (!node)
 			goto bad;
 	}
+	capabilities_node = xmlNewTextChild(root, NULL, XCAST("capabilities"), NULL);
+	if (!capabilities_node)
+		goto bad;
+	node = xmlNewTextChild(capabilities_node, NULL, XCAST("auth-method"), XCAST("single-sign-on-v2"));
+	if (!node)
+		goto bad;
+
 	buf_free(url_buf);
 	return xmlpost_complete(doc, request_body);
 

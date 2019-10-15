@@ -164,6 +164,19 @@ void free_opt(struct oc_form_opt *opt)
 	free(opt);
 }
 
+void free_sso_v2_opt(struct oc_sso_v2_opt *sso_v2_opt)
+{
+	if (!sso_v2_opt)
+		return;
+
+	free(sso_v2_opt->login);
+	free(sso_v2_opt->login_final);
+	free(sso_v2_opt->logout);
+	free(sso_v2_opt->logout_final);
+	free(sso_v2_opt->token_cookie_name);
+	free(sso_v2_opt->error_cookie_name);
+}
+
 void free_auth_form(struct oc_auth_form *form)
 {
 	if (!form)
@@ -173,6 +186,7 @@ void free_auth_form(struct oc_auth_form *form)
 		free_opt(form->opts);
 		form->opts = tmp;
 	}
+	free_sso_v2_opt(form->sso_v2_opt);
 	free(form->error);
 	free(form->message);
 	free(form->banner);
